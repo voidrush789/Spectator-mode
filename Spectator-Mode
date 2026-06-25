@@ -1,0 +1,251 @@
+local scriptCode = [====[
+-- Services
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local localPlayer = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+
+-- System State Variables
+local spectating = false
+local targetIndex = 1
+local targetPlayer = nil
+
+-- Clean up any duplicate UIs
+local oldGui = localPlayer:WaitForChild("PlayerGui"):FindFirstChild("VoidrushSpectatorV3")
+if oldGui then oldGui:Destroy() end
+
+-- Create ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "VoidrushSpectatorV3"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 100
+ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+--------------------------------------------------------------------------
+-- UI ELEMENTS CONFIGURATION (Mini Top-Left Layout under Roblox Icon)
+--------------------------------------------------------------------------
+
+-- Main Control Panel (Small & position directly below topbar Roblox button)
+local ControlFrame = Instance.new("Frame")
+ControlFrame.Name = "ControlFrame"
+ControlFrame.Size = UDim2.new(0, 190, 0, 40)
+ControlFrame.Position = UDim2.new(0, 12, 0, 55) -- Safely fits right under the Roblox menu
+ControlFrame.BackgroundTransparency = 1
+ControlFrame.Visible = false
+ControlFrame.Parent = ScreenGui
+
+-- Left Cycle Arrow (<)
+local LeftBtn = Instance.new("TextButton")
+LeftBtn.Name = "LeftBtn"
+LeftBtn.Size = UDim2.new(0, 32, 0, 32)
+LeftBtn.Position = UDim2.new(0, 0, 0.5, -16)
+LeftBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+LeftBtn.BackgroundTransparency = 0.6 -- 60S Transparency
+LeftBtn.BorderSizePixel = 0
+LeftBtn.Text = "<"
+LeftBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+LeftBtn.Font = Enum.Font.SourceSansBold
+LeftBtn.TextSize = 18
+LeftBtn.Parent = ControlFrame
+
+local LeftCorner = Instance.new("UICorner")
+LeftCorner.CornerRadius = UDim.new(1, 0)
+LeftCorner.Parent = LeftBtn
+
+-- Right Cycle Arrow (>)
+local RightBtn = Instance.new("TextButton")
+RightBtn.Name = "RightBtn"
+RightBtn.Size = UDim2.new(0, 32, 0, 32)
+RightBtn.Position = UDim2.new(1, -32, 0.5, -16)
+RightBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+RightBtn.BackgroundTransparency = 0.6 -- 60S Transparency
+RightBtn.BorderSizePixel = 0
+RightBtn.Text = ">"
+RightBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RightBtn.Font = Enum.Font.SourceSansBold
+RightBtn.TextSize = 18
+RightBtn.Parent = ControlFrame
+
+local RightCorner = Instance.new("UICorner")
+RightCorner.CornerRadius = UDim.new(1, 0)
+RightCorner.Parent = RightBtn
+
+-- Small Profile Capsule Tracker
+local ProfileCapsule = Instance.new("Frame")
+ProfileCapsule.Name = "ProfileCapsule"
+ProfileCapsule.Size = UDim2.new(0, 114, 0, 32)
+ProfileCapsule.Position = UDim2.new(0.5, -57, 0.5, -16)
+ProfileCapsule.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+ProfileCapsule.BackgroundTransparency = 0.6 -- 60S Transparency
+ProfileCapsule.BorderSizePixel = 0
+ProfileCapsule.Parent = ControlFrame
+
+local CapsuleCorner = Instance.new("UICorner")
+CapsuleCorner.CornerRadius = UDim.new(0, 16)
+CapsuleCorner.Parent = ProfileCapsule
+
+-- Dynamic Live Player Avatar Headshot View Node
+local ProfileIcon = Instance.new("ImageLabel")
+ProfileIcon.Name = "ProfileIcon"
+ProfileIcon.Size = UDim2.new(0, 24, 0, 24)
+ProfileIcon.Position = UDim2.new(0, 5, 0.5, -12)
+ProfileIcon.BackgroundTransparency = 1
+ProfileIcon.Image = "rbxassetid://6075196476" -- Temporary fallback icon
+ProfileIcon.Parent = ProfileCapsule
+
+-- Make the headshot image rounded nicely too
+local IconCorner = Instance.new("UICorner")
+IconCorner.CornerRadius = UDim.new(1, 0)
+IconCorner.Parent = ProfileIcon
+
+-- Micro Text Container
+local TextContainer = Instance.new("Frame")
+TextContainer.Size = UDim2.new(0, 75, 0, 26)
+TextContainer.Position = UDim2.new(0, 34, 0.5, -13)
+TextContainer.BackgroundTransparency = 1
+TextContainer.Parent = ProfileCapsule
+
+-- Compact Username Label
+local UserLabel = Instance.new("TextLabel")
+UserLabel.Name = "UserLabel"
+UserLabel.Size = UDim2.new(1, 0, 0, 14)
+UserLabel.Position = UDim2.new(0, 0, 0, 0)
+UserLabel.BackgroundTransparency = 1
+UserLabel.Text = "Username"
+UserLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+UserLabel.Font = Enum.Font.SourceSansBold
+UserLabel.TextSize = 11
+UserLabel.TextXAlignment = Enum.TextXAlignment.Left
+UserLabel.TextTruncate = Enum.TextTruncate.AtEnd
+UserLabel.Parent = TextContainer
+
+-- Compact Display Name Label
+local NickLabel = Instance.new("TextLabel")
+NickLabel.Name = "NickLabel"
+NickLabel.Size = UDim2.new(1, 0, 0, 12)
+NickLabel.Position = UDim2.new(0, 0, 0, 12)
+NickLabel.BackgroundTransparency = 1
+NickLabel.Text = "Nickname"
+NickLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+NickLabel.Font = Enum.Font.SourceSans
+NickLabel.TextSize = 9
+NickLabel.TextXAlignment = Enum.TextXAlignment.Left
+NickLabel.TextTruncate = Enum.TextTruncate.AtEnd
+NickLabel.Parent = TextContainer
+
+--------------------------------------------------------------------------
+-- SYSTEM FUNCTIONAL LOGIC
+--------------------------------------------------------------------------
+
+local function GetPlayersList()
+	local list = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= localPlayer then table.insert(list, p) end
+	end
+	return list
+end
+
+-- Safely updates UI names and handles character streaming avatar requests
+local function UpdateSpectateTarget()
+	local list = GetPlayersList()
+	if #list == 0 then
+		UserLabel.Text = "No Targets"
+		NickLabel.Text = "Server Empty"
+		ProfileIcon.Image = "rbxassetid://6075196476"
+		camera.CameraSubject = localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid")
+		return
+	end
+
+	if targetIndex > #list then targetIndex = 1 end
+	if targetIndex < 1 then targetIndex = #list end
+
+	targetPlayer = list[targetIndex]
+	if targetPlayer then
+		UserLabel.Text = targetPlayer.Name
+		NickLabel.Text = targetPlayer.DisplayName
+		
+		-- Fetch the player's real avatar headshot thumbnail instantly
+		task.spawn(function()
+			local success, content = pcall(function()
+				return Players:GetUserThumbnailAsync(targetPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+			end)
+			if success then
+				ProfileIcon.Image = content
+			else
+				ProfileIcon.Image = "rbxassetid://6075196476"
+			end
+		end)
+
+		if targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
+			camera.CameraSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+		end
+	end
+end
+
+-- Keeps focus anchored even through deaths or respawns
+task.spawn(function()
+	while task.wait(0.2) do
+		if spectating and targetPlayer then
+			if targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
+				if camera.CameraSubject ~= targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
+					camera.CameraSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+				end
+			end
+		end
+	end
+end)
+
+-- Arrow Connections
+LeftBtn.MouseButton1Click:Connect(function()
+	targetIndex = targetIndex - 1
+	UpdateSpectateTarget()
+end)
+
+RightBtn.MouseButton1Click:Connect(function()
+	targetIndex = targetIndex + 1
+	UpdateSpectateTarget()
+end)
+
+--------------------------------------------------------------------------
+-- SECRET CHAT COMMAND ENGINE TIGHT HOOKS
+--------------------------------------------------------------------------
+local function HandleChatCommand(msg)
+	-- Check if command matches perfectly (Case Insensitive to easily support /e view or /e View)
+	if msg:lower() == "/e view" then
+		spectating = not spectating
+		
+		if spectating then
+			ControlFrame.Visible = true
+			targetIndex = 1
+			UpdateSpectateTarget()
+		else
+			ControlFrame.Visible = false
+			targetPlayer = nil
+			if localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid") then
+				camera.CameraSubject = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+			end
+		end
+	end
+end
+
+-- Hook onto chat system
+localPlayer.Chatted:Connect(HandleChatCommand)
+]====]
+
+-- Instant execution loop for current play session
+local runScript, err = loadstring(scriptCode)
+if runScript then
+    task.spawn(runScript)
+else
+    warn("UI Load Issue: " .. tostring(err))
+end
+
+-- Teleport framework handler for Delta persistence
+local queueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+if queueTeleport then
+    game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(teleportState)
+        if teleportState == Enum.TeleportState.InProgress then
+            queueTeleport(scriptCode)
+        end
+    end)
+end
