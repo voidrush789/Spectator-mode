@@ -199,9 +199,14 @@ RightBtn.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------------------------------
--- SECURE INTERCEPT CHAT TOGGLE LOGIC (INVISIBLE TO OTHERS)
+-- UNIVERSAL INTERCEPT CHAT TOGGLE LOGIC
 --------------------------------------------------------------------------
+local lastToggle = 0
 local function ToggleSpectate()
+	-- Prevents execution spam or double-toggling if multiple systems capture the text
+	if os.clock() - lastToggle < 0.3 then return end
+	lastToggle = os.clock()
+
 	spectating = not spectating
 	if spectating then
 		ControlFrame.Visible = true
@@ -216,11 +221,28 @@ local function ToggleSpectate()
 	end
 end
 
--- 1. Modern Chat Interceptor (Completely blocks messages from going to server)
-if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+-- Unified command checker function
+local function checkMessageText(msg)
+	local cleanMsg = msg:match("^%s*(.-)%s*$") -- Strip accidental leading/trailing spaces
+	if cleanMsg:lower() == "/view" then
+		ToggleSpectate()
+	end
+end
+
+-- 1. Legacy Chat Compatibility Hook
+localPlayer.Chatted:Connect(checkMessageText)
+
+-- 2. Modern TextChatService Compatibility Hook (Guaranteed string tracking fallback)
+TextChatService.MessageReceived:Connect(function(textChatMessage)
+	if textChatMessage.TextSource and textChatMessage.TextSource.UserId == localPlayer.UserId then
+		checkMessageText(textChatMessage.Text)
+	end
+end)
+
+-- 3. Modern Chat Command Handler (Maintains silent handling when engine allows)
+task.spawn(function()
 	local textCommands = TextChatService:FindFirstChild("TextCommands") or TextChatService:WaitForChild("TextCommands", 5)
 	if textCommands then
-		-- Clean up any existing duplicate registered commands
 		local oldCmd = textCommands:FindFirstChild("VoidViewCommand")
 		if oldCmd then oldCmd:Destroy() end
 
@@ -230,18 +252,7 @@ if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
 		viewCommand.SecondaryAlias = "/View"
 		viewCommand.Parent = textCommands
 		
-		viewCommand.Triggered:Connect(function()
-			ToggleSpectate()
-		end)
-	end
-end
-
--- 2. Legacy Chat Fallback Hook (Just in case the place rolls back versions)
-localPlayer.Chatted:Connect(function(msg)
-	if TextChatService.ChatVersion == Enum.ChatVersion.LegacyChatService then
-		if msg:lower() == "/view" then
-			ToggleSpectate()
-		end
+		viewCommand.Triggered:Connect(ToggleSpectate)
 	end
 end)
 ]====]
