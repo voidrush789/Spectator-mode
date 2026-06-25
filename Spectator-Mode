@@ -2,6 +2,7 @@ local scriptCode = [====[
 -- Services
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local TextChatService = game:GetService("TextChatService")
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
@@ -11,25 +12,25 @@ local targetIndex = 1
 local targetPlayer = nil
 
 -- Clean up any duplicate UIs
-local oldGui = localPlayer:WaitForChild("PlayerGui"):FindFirstChild("VoidrushSpectatorV3")
+local oldGui = localPlayer:WaitForChild("PlayerGui"):FindFirstChild("VoidrushSpectatorV4")
 if oldGui then oldGui:Destroy() end
 
 -- Create ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "VoidrushSpectatorV3"
+ScreenGui.Name = "VoidrushSpectatorV4"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
 --------------------------------------------------------------------------
--- UI ELEMENTS CONFIGURATION (Mini Top-Left Layout under Roblox Icon)
+-- UI ELEMENTS CONFIGURATION (Shifted Up to the Top-Left Region)
 --------------------------------------------------------------------------
 
--- Main Control Panel (Small & position directly below topbar Roblox button)
+-- Main Control Panel (Shifted higher up to sit neatly below topbar icons)
 local ControlFrame = Instance.new("Frame")
 ControlFrame.Name = "ControlFrame"
 ControlFrame.Size = UDim2.new(0, 190, 0, 40)
-ControlFrame.Position = UDim2.new(0, 12, 0, 55) -- Safely fits right under the Roblox menu
+ControlFrame.Position = UDim2.new(0, 15, 0, 42) -- Moved up closely under the Roblox menu icon
 ControlFrame.BackgroundTransparency = 1
 ControlFrame.Visible = false
 ControlFrame.Parent = ScreenGui
@@ -40,7 +41,7 @@ LeftBtn.Name = "LeftBtn"
 LeftBtn.Size = UDim2.new(0, 32, 0, 32)
 LeftBtn.Position = UDim2.new(0, 0, 0.5, -16)
 LeftBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-LeftBtn.BackgroundTransparency = 0.6 -- 60S Transparency
+LeftBtn.BackgroundTransparency = 0.6 -- 60% Transparency Look
 LeftBtn.BorderSizePixel = 0
 LeftBtn.Text = "<"
 LeftBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -58,7 +59,7 @@ RightBtn.Name = "RightBtn"
 RightBtn.Size = UDim2.new(0, 32, 0, 32)
 RightBtn.Position = UDim2.new(1, -32, 0.5, -16)
 RightBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-RightBtn.BackgroundTransparency = 0.6 -- 60S Transparency
+RightBtn.BackgroundTransparency = 0.6 -- 60% Transparency Look
 RightBtn.BorderSizePixel = 0
 RightBtn.Text = ">"
 RightBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -76,7 +77,7 @@ ProfileCapsule.Name = "ProfileCapsule"
 ProfileCapsule.Size = UDim2.new(0, 114, 0, 32)
 ProfileCapsule.Position = UDim2.new(0.5, -57, 0.5, -16)
 ProfileCapsule.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-ProfileCapsule.BackgroundTransparency = 0.6 -- 60S Transparency
+ProfileCapsule.BackgroundTransparency = 0.6 -- 60% Transparency Look
 ProfileCapsule.BorderSizePixel = 0
 ProfileCapsule.Parent = ControlFrame
 
@@ -90,10 +91,9 @@ ProfileIcon.Name = "ProfileIcon"
 ProfileIcon.Size = UDim2.new(0, 24, 0, 24)
 ProfileIcon.Position = UDim2.new(0, 5, 0.5, -12)
 ProfileIcon.BackgroundTransparency = 1
-ProfileIcon.Image = "rbxassetid://6075196476" -- Temporary fallback icon
+ProfileIcon.Image = "rbxassetid://6075196476"
 ProfileIcon.Parent = ProfileCapsule
 
--- Make the headshot image rounded nicely too
 local IconCorner = Instance.new("UICorner")
 IconCorner.CornerRadius = UDim.new(1, 0)
 IconCorner.Parent = ProfileIcon
@@ -145,7 +145,6 @@ local function GetPlayersList()
 	return list
 end
 
--- Safely updates UI names and handles character streaming avatar requests
 local function UpdateSpectateTarget()
 	local list = GetPlayersList()
 	if #list == 0 then
@@ -164,16 +163,11 @@ local function UpdateSpectateTarget()
 		UserLabel.Text = targetPlayer.Name
 		NickLabel.Text = targetPlayer.DisplayName
 		
-		-- Fetch the player's real avatar headshot thumbnail instantly
 		task.spawn(function()
 			local success, content = pcall(function()
 				return Players:GetUserThumbnailAsync(targetPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
 			end)
-			if success then
-				ProfileIcon.Image = content
-			else
-				ProfileIcon.Image = "rbxassetid://6075196476"
-			end
+			if success then ProfileIcon.Image = content else ProfileIcon.Image = "rbxassetid://6075196476" end
 		end)
 
 		if targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
@@ -182,7 +176,6 @@ local function UpdateSpectateTarget()
 	end
 end
 
--- Keeps focus anchored even through deaths or respawns
 task.spawn(function()
 	while task.wait(0.2) do
 		if spectating and targetPlayer then
@@ -195,7 +188,6 @@ task.spawn(function()
 	end
 end)
 
--- Arrow Connections
 LeftBtn.MouseButton1Click:Connect(function()
 	targetIndex = targetIndex - 1
 	UpdateSpectateTarget()
@@ -207,29 +199,51 @@ RightBtn.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------------------------------
--- SECRET CHAT COMMAND ENGINE TIGHT HOOKS
+-- SECURE INTERCEPT CHAT TOGGLE LOGIC (INVISIBLE TO OTHERS)
 --------------------------------------------------------------------------
-local function HandleChatCommand(msg)
-	-- Check if command matches perfectly (Case Insensitive to easily support /e view or /e View)
-	if msg:lower() == "/e view" then
-		spectating = not spectating
-		
-		if spectating then
-			ControlFrame.Visible = true
-			targetIndex = 1
-			UpdateSpectateTarget()
-		else
-			ControlFrame.Visible = false
-			targetPlayer = nil
-			if localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid") then
-				camera.CameraSubject = localPlayer.Character:FindFirstChildOfClass("Humanoid")
-			end
+local function ToggleSpectate()
+	spectating = not spectating
+	if spectating then
+		ControlFrame.Visible = true
+		targetIndex = 1
+		UpdateSpectateTarget()
+	else
+		ControlFrame.Visible = false
+		targetPlayer = nil
+		if localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid") then
+			camera.CameraSubject = localPlayer.Character:FindFirstChildOfClass("Humanoid")
 		end
 	end
 end
 
--- Hook onto chat system
-localPlayer.Chatted:Connect(HandleChatCommand)
+-- 1. Modern Chat Interceptor (Completely blocks messages from going to server)
+if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+	local textCommands = TextChatService:FindFirstChild("TextCommands") or TextChatService:WaitForChild("TextCommands", 5)
+	if textCommands then
+		-- Clean up any existing duplicate registered commands
+		local oldCmd = textCommands:FindFirstChild("VoidViewCommand")
+		if oldCmd then oldCmd:Destroy() end
+
+		local viewCommand = Instance.new("TextChatCommand")
+		viewCommand.Name = "VoidViewCommand"
+		viewCommand.PrimaryAlias = "/view"
+		viewCommand.SecondaryAlias = "/View"
+		viewCommand.Parent = textCommands
+		
+		viewCommand.Triggered:Connect(function()
+			ToggleSpectate()
+		end)
+	end
+end
+
+-- 2. Legacy Chat Fallback Hook (Just in case the place rolls back versions)
+localPlayer.Chatted:Connect(function(msg)
+	if TextChatService.ChatVersion == Enum.ChatVersion.LegacyChatService then
+		if msg:lower() == "/view" then
+			ToggleSpectate()
+		end
+	end
+end)
 ]====]
 
 -- Instant execution loop for current play session
