@@ -2,7 +2,6 @@ local scriptCode = [====[
 -- Services
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local TextChatService = game:GetService("TextChatService")
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
@@ -23,25 +22,23 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
 --------------------------------------------------------------------------
--- UI ELEMENTS CONFIGURATION (Shifted Up to the Top-Left Region)
+-- UI ELEMENTS CONFIGURATION
 --------------------------------------------------------------------------
 
--- Main Control Panel (Shifted higher up to sit neatly below topbar icons)
 local ControlFrame = Instance.new("Frame")
 ControlFrame.Name = "ControlFrame"
 ControlFrame.Size = UDim2.new(0, 190, 0, 40)
-ControlFrame.Position = UDim2.new(0, 15, 0, 42) -- Moved up closely under the Roblox menu icon
+ControlFrame.Position = UDim2.new(0, 15, 0, 42)
 ControlFrame.BackgroundTransparency = 1
 ControlFrame.Visible = false
 ControlFrame.Parent = ScreenGui
 
--- Left Cycle Arrow (<)
 local LeftBtn = Instance.new("TextButton")
 LeftBtn.Name = "LeftBtn"
 LeftBtn.Size = UDim2.new(0, 32, 0, 32)
 LeftBtn.Position = UDim2.new(0, 0, 0.5, -16)
 LeftBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-LeftBtn.BackgroundTransparency = 0.6 -- 60% Transparency Look
+LeftBtn.BackgroundTransparency = 0.6
 LeftBtn.BorderSizePixel = 0
 LeftBtn.Text = "<"
 LeftBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -53,13 +50,12 @@ local LeftCorner = Instance.new("UICorner")
 LeftCorner.CornerRadius = UDim.new(1, 0)
 LeftCorner.Parent = LeftBtn
 
--- Right Cycle Arrow (>)
 local RightBtn = Instance.new("TextButton")
 RightBtn.Name = "RightBtn"
 RightBtn.Size = UDim2.new(0, 32, 0, 32)
 RightBtn.Position = UDim2.new(1, -32, 0.5, -16)
 RightBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-RightBtn.BackgroundTransparency = 0.6 -- 60% Transparency Look
+RightBtn.BackgroundTransparency = 0.6
 RightBtn.BorderSizePixel = 0
 RightBtn.Text = ">"
 RightBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -71,13 +67,12 @@ local RightCorner = Instance.new("UICorner")
 RightCorner.CornerRadius = UDim.new(1, 0)
 RightCorner.Parent = RightBtn
 
--- Small Profile Capsule Tracker
 local ProfileCapsule = Instance.new("Frame")
 ProfileCapsule.Name = "ProfileCapsule"
 ProfileCapsule.Size = UDim2.new(0, 114, 0, 32)
 ProfileCapsule.Position = UDim2.new(0.5, -57, 0.5, -16)
 ProfileCapsule.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-ProfileCapsule.BackgroundTransparency = 0.6 -- 60% Transparency Look
+ProfileCapsule.BackgroundTransparency = 0.6
 ProfileCapsule.BorderSizePixel = 0
 ProfileCapsule.Parent = ControlFrame
 
@@ -85,7 +80,6 @@ local CapsuleCorner = Instance.new("UICorner")
 CapsuleCorner.CornerRadius = UDim.new(0, 16)
 CapsuleCorner.Parent = ProfileCapsule
 
--- Dynamic Live Player Avatar Headshot View Node
 local ProfileIcon = Instance.new("ImageLabel")
 ProfileIcon.Name = "ProfileIcon"
 ProfileIcon.Size = UDim2.new(0, 24, 0, 24)
@@ -98,18 +92,15 @@ local IconCorner = Instance.new("UICorner")
 IconCorner.CornerRadius = UDim.new(1, 0)
 IconCorner.Parent = ProfileIcon
 
--- Micro Text Container
 local TextContainer = Instance.new("Frame")
 TextContainer.Size = UDim2.new(0, 75, 0, 26)
 TextContainer.Position = UDim2.new(0, 34, 0.5, -13)
 TextContainer.BackgroundTransparency = 1
 TextContainer.Parent = ProfileCapsule
 
--- Compact Username Label
 local UserLabel = Instance.new("TextLabel")
 UserLabel.Name = "UserLabel"
 UserLabel.Size = UDim2.new(1, 0, 0, 14)
-UserLabel.Position = UDim2.new(0, 0, 0, 0)
 UserLabel.BackgroundTransparency = 1
 UserLabel.Text = "Username"
 UserLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -119,11 +110,9 @@ UserLabel.TextXAlignment = Enum.TextXAlignment.Left
 UserLabel.TextTruncate = Enum.TextTruncate.AtEnd
 UserLabel.Parent = TextContainer
 
--- Compact Display Name Label
 local NickLabel = Instance.new("TextLabel")
 NickLabel.Name = "NickLabel"
 NickLabel.Size = UDim2.new(1, 0, 0, 12)
-NickLabel.Position = UDim2.new(0, 0, 0, 12)
 NickLabel.BackgroundTransparency = 1
 NickLabel.Text = "Nickname"
 NickLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -199,11 +188,10 @@ RightBtn.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------------------------------
--- UNIVERSAL INTERCEPT CHAT TOGGLE LOGIC
+-- TOTAL STEAL INTERCEPT LOGIC (100% INVISIBLE TO OTHERS)
 --------------------------------------------------------------------------
 local lastToggle = 0
 local function ToggleSpectate()
-	-- Prevents execution spam or double-toggling if multiple systems capture the text
 	if os.clock() - lastToggle < 0.3 then return end
 	lastToggle = os.clock()
 
@@ -221,39 +209,31 @@ local function ToggleSpectate()
 	end
 end
 
--- Unified command checker function
-local function checkMessageText(msg)
-	local cleanMsg = msg:match("^%s*(.-)%s*$") -- Strip accidental leading/trailing spaces
-	if cleanMsg:lower() == "/view" then
-		ToggleSpectate()
+-- Hook network calls directly to block data replication to the server
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+	local method = getnamecallmethod()
+	local args = {...}
+	
+	-- Legacy Chat Intercept (Blocks old chat engine remotes)
+	if method == "FireServer" and self.Name == "SayMessageRequest" then
+		local msg = args[1]
+		if msg and msg:lower():match("^%s*/view%s*$") then
+			task.spawn(ToggleSpectate)
+			return -- Dropping this call means the server never sees it
+		end
 	end
-end
-
--- 1. Legacy Chat Compatibility Hook
-localPlayer.Chatted:Connect(checkMessageText)
-
--- 2. Modern TextChatService Compatibility Hook (Guaranteed string tracking fallback)
-TextChatService.MessageReceived:Connect(function(textChatMessage)
-	if textChatMessage.TextSource and textChatMessage.TextSource.UserId == localPlayer.UserId then
-		checkMessageText(textChatMessage.Text)
+	
+	-- Modern Chat Intercept (Blocks new TextChatService channels)
+	if method == "SendAsync" and self:IsA("TextChannel") then
+		local msg = args[1]
+		if msg and msg:lower():match("^%s*/view%s*$") then
+			task.spawn(ToggleSpectate)
+			return -- Dropping this call means nobody else in the channel gets it
+		end
 	end
-end)
-
--- 3. Modern Chat Command Handler (Maintains silent handling when engine allows)
-task.spawn(function()
-	local textCommands = TextChatService:FindFirstChild("TextCommands") or TextChatService:WaitForChild("TextCommands", 5)
-	if textCommands then
-		local oldCmd = textCommands:FindFirstChild("VoidViewCommand")
-		if oldCmd then oldCmd:Destroy() end
-
-		local viewCommand = Instance.new("TextChatCommand")
-		viewCommand.Name = "VoidViewCommand"
-		viewCommand.PrimaryAlias = "/view"
-		viewCommand.SecondaryAlias = "/View"
-		viewCommand.Parent = textCommands
-		
-		viewCommand.Triggered:Connect(ToggleSpectate)
-	end
+	
+	return oldNamecall(self, ...)
 end)
 ]====]
 
