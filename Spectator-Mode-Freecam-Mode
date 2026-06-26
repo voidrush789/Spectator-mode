@@ -1,9 +1,16 @@
+--======================================================================================
+--                     VOIDRUSH SPECTATOR & FREECAM V4.2
+--======================================================================================
+
+local cacheFileName = "voidrush_spectator_cache.lua"
 local scriptCode = [====[
 -- Services
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
@@ -64,7 +71,7 @@ ToggleCorner.Parent = ToggleBtn
 
 local ControlFrame = Instance.new("Frame")
 ControlFrame.Name = "ControlFrame"
-ControlFrame.Size = UDim2.new(0, 266, 0, 40) -- Expanded width for side-by-side buttons
+ControlFrame.Size = UDim2.new(0, 338, 0, 40)
 ControlFrame.Position = UDim2.new(0, 15, 0, 45)
 ControlFrame.BackgroundTransparency = 1
 ControlFrame.Visible = false
@@ -134,7 +141,6 @@ local FreecamCorner = Instance.new("UICorner")
 FreecamCorner.CornerRadius = UDim.new(1, 0)
 FreecamCorner.Parent = FreecamBtn
 
--- NEW: Zooming Toggle Button placed cleanly next to FC button
 local ZoomBtn = Instance.new("TextButton")
 ZoomBtn.Name = "ZoomBtn"
 ZoomBtn.Size = UDim2.new(0, 32, 0, 32)
@@ -143,7 +149,7 @@ ZoomBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 ZoomBtn.BackgroundTransparency = 0.6
 ZoomBtn.BorderSizePixel = 0
 ZoomBtn.Text = "ZM"
-ZoomBtn.TextColor3 = Color3.fromRGB(0, 255, 120) -- Green text indicating default ON state
+ZoomBtn.TextColor3 = Color3.fromRGB(0, 255, 120) 
 ZoomBtn.Font = Enum.Font.SourceSansBold
 ZoomBtn.TextSize = 13
 ZoomBtn.Visible = false
@@ -152,6 +158,42 @@ ZoomBtn.Parent = ControlFrame
 local ZoomCorner = Instance.new("UICorner")
 ZoomCorner.CornerRadius = UDim.new(1, 0)
 ZoomCorner.Parent = ZoomBtn
+
+local ShopBtn = Instance.new("TextButton")
+ShopBtn.Name = "ShopBtn"
+ShopBtn.Size = UDim2.new(0, 32, 0, 32)
+ShopBtn.Position = UDim2.new(0, 266, 0.5, -16)
+ShopBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+ShopBtn.BackgroundTransparency = 0.6
+ShopBtn.BorderSizePixel = 0
+ShopBtn.Text = "SH"
+ShopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ShopBtn.Font = Enum.Font.SourceSansBold
+ShopBtn.TextSize = 13
+ShopBtn.Visible = false
+ShopBtn.Parent = ControlFrame
+
+local ShopCorner = Instance.new("UICorner")
+ShopCorner.CornerRadius = UDim.new(1, 0)
+ShopCorner.Parent = ShopBtn
+
+local RJBtn = Instance.new("TextButton")
+RJBtn.Name = "RJBtn"
+RJBtn.Size = UDim2.new(0, 32, 0, 32)
+RJBtn.Position = UDim2.new(0, 302, 0.5, -16)
+RJBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+RJBtn.BackgroundTransparency = 0.6
+RJBtn.BorderSizePixel = 0
+RJBtn.Text = "RJ"
+RJBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RJBtn.Font = Enum.Font.SourceSansBold
+RJBtn.TextSize = 13
+RJBtn.Visible = false
+RJBtn.Parent = ControlFrame
+
+local RJCorner = Instance.new("UICorner")
+RJCorner.CornerRadius = UDim.new(1, 0)
+RJCorner.Parent = RJBtn
 
 local ProfileIcon = Instance.new("ImageLabel")
 ProfileIcon.Name = "ProfileIcon"
@@ -254,7 +296,6 @@ local function UpdateSpectateTarget(forceCamChange)
 	end
 end
 
--- Camera Subject Lock Loop
 task.spawn(function()
 	while task.wait(0.2) do
 		if spectating and isViewingTarget and targetPlayer and not freecamming then
@@ -284,7 +325,71 @@ LeftBtn.MouseButton1Click:Connect(function() CyclePlayers(-1) end)
 RightBtn.MouseButton1Click:Connect(function() CyclePlayers(1) end)
 
 --------------------------------------------------------------------------
--- SILENT CHAT SPEED INTERCEPT (RETAINED)
+-- SECURE WORKSPACE-CACHE PERSISTENCE ENGINE
+--------------------------------------------------------------------------
+
+local queueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+
+local function ForceQueueScript()
+	if queueTeleport then
+		pcall(function()
+			queueTeleport([[
+				local name = "voidrush_spectator_cache.lua"
+				if readfile and pcall(function() return readfile(name) end) then
+					local run = loadstring(readfile(name))
+					if run then task.spawn(run) end
+				end
+			]])
+		end)
+	end
+end
+
+-- Intercept unexpected map teleports
+pcall(function()
+	localPlayer.OnTeleport:Connect(function(teleportState)
+		if teleportState == Enum.TeleportState.InProgress then
+			ForceQueueScript()
+		end
+	end)
+end)
+
+-- RJ Button Click Handlers
+RJBtn.MouseButton1Click:Connect(function()
+	ForceQueueScript()
+	task.wait(0.1)
+	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
+end)
+
+-- SH Button Click Handlers
+ShopBtn.MouseButton1Click:Connect(function()
+	ForceQueueScript()
+	task.spawn(function()
+		local api = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+		local success, result = pcall(function() return game:HttpGet(api) end)
+		local targetServer = nil
+		
+		if success and result then
+			local data = HttpService:JSONDecode(result)
+			if data and data.data then
+				for _, server in ipairs(data.data) do
+					if server.id ~= game.JobId and server.playing < server.maxPlayers then
+						targetServer = server.id
+						break
+					end
+				end
+			end
+		end
+		
+		if targetServer then
+			TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServer, localPlayer)
+		else
+			TeleportService:Teleport(game.PlaceId, localPlayer)
+		end
+	end)
+end)
+
+--------------------------------------------------------------------------
+-- CHAT INTERCEPT ENGINE (SPEED SLIDER REPLACEMENT)
 --------------------------------------------------------------------------
 
 RunService.RenderStepped:Connect(function()
@@ -293,6 +398,202 @@ RunService.RenderStepped:Connect(function()
 		if not textBox:GetAttribute("FCCommandHooked") then
 			textBox:SetAttribute("FCCommandHooked", true)
 			
+			textBox.FocusLost:Connect(function(enterPressed)
+				if enterPressed then
+					local text = textBox.Text:lower():gsub("%s+", " ")
+					local speedMatch = text:match("^/e%s*speed%s*(%d+)") or text:match("^/speed%s*(%d+)")
+					if speedMatch then
+						local newSpeed = tonumber(speedMatch)
+						if newSpeed then moveSpeed = newSpeed end
+						textBox.Text = "" 
+					end
+				end
+			end)
+		end
+	end
+end)
+
+--------------------------------------------------------------------------
+-- ZOOM TOGGLE ACTION WORKFLOW
+--------------------------------------------------------------------------
+
+ZoomBtn.MouseButton1Click:Connect(function()
+	pinchZoomEnabled = not pinchZoomEnabled
+	if pinchZoomEnabled then
+		ZoomBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
+	else
+		ZoomBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+		initialPinchDistance = nil
+	end
+end)
+
+--------------------------------------------------------------------------
+-- MOBILE TOUCH PANNING & PINCH-TO-ZOOM GESTURE ENGINE
+--------------------------------------------------------------------------
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if not freecamming then return end
+	if input.UserInputType == Enum.UserInputType.Touch then
+		if input.Position.X < (camera.ViewportSize.X * 0.4) then return end
+		if gameProcessed then return end
+		
+		activeTouches[input] = true
+		local touches = {}
+		for t in pairs(activeTouches) do table.insert(touches, t) end
+		
+		if #touches == 2 and pinchZoomEnabled then
+			panTouch = nil
+			lastTouchPosition = nil
+			initialPinchDistance = (Vector2.new(touches[1].Position.X, touches[1].Position.Y) - Vector2.new(touches[2].Position.X, touches[2].Position.Y)).Magnitude
+		elseif #touches == 1 then
+			panTouch = input
+			lastTouchPosition = Vector2.new(input.Position.X, input.Position.Y)
+		end
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input, gameProcessed)
+	if not freecamming then return end
+	if not activeTouches[input] then return end
+	
+	local touches = {}
+	for t in pairs(activeTouches) do table.insert(touches, t) end
+	
+	if #touches == 2 and initialPinchDistance and pinchZoomEnabled then
+		local currentDistance = (Vector2.new(touches[1].Position.X, touches[1].Position.Y) - Vector2.new(touches[2].Position.X, touches[2].Position.Y)).Magnitude
+		local change = currentDistance - initialPinchDistance
+		initialPinchDistance = currentDistance
+		
+		local zoomSensitivity = 0.15
+		camera.CFrame = camera.CFrame * CFrame.new(0, 0, -change * zoomSensitivity)
+	elseif input == panTouch and lastTouchPosition then
+		local currentPosition = Vector2.new(input.Position.X, input.Position.Y)
+		local delta = currentPosition - lastTouchPosition
+		lastTouchPosition = currentPosition
+		
+		cameraRotY = cameraRotY - (delta.X * 0.3)
+		cameraRotX = cameraRotX - (delta.Y * 0.3)
+		cameraRotX = math.clamp(cameraRotX, -85, 85)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if activeTouches[input] then
+		activeTouches[input] = nil
+		initialPinchDistance = nil
+	end
+	if input == panTouch then
+		panTouch = nil
+		lastTouchPosition = nil
+	end
+end)
+
+--------------------------------------------------------------------------
+-- FREECAM STATE SWITCH ENGINE
+--------------------------------------------------------------------------
+
+local function ToggleFreecam(state)
+	local character = localPlayer.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+
+	if state then
+		freecamming = true
+		FreecamBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+		ZoomBtn.Visible = true
+		ShopBtn.Visible = true
+		RJBtn.Visible = true
+		
+		local startingCFrame = camera.CFrame
+		camera.CameraType = Enum.CameraType.Scriptable
+		camera.CFrame = startingCFrame
+		
+		if hrp then hrp.Anchored = true end
+		
+		local look = startingCFrame.LookVector
+		cameraRotY = math.deg(math.atan2(-look.X, -look.Z))
+		cameraRotX = math.deg(math.asin(look.Y))
+		
+		freecamConnection = RunService.RenderStepped:Connect(function(dt)
+			local moveVector = Vector3.new(0, 0, 0)
+			if controls and controls.GetMoveVector then
+				moveVector = controls:GetMoveVector()
+			end
+			
+			local direction = (camera.CFrame.LookVector * -moveVector.Z) + (camera.CFrame.RightVector * moveVector.X)
+			local targetPos = camera.CFrame.Position + (direction * moveSpeed * dt)
+			camera.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(cameraRotY), 0) * CFrame.Angles(math.rad(cameraRotX), 0, 0)
+		end)
+	else
+		freecamming = false
+		FreecamBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		ZoomBtn.Visible = false
+		ShopBtn.Visible = false
+		RJBtn.Visible = false
+		
+		if freecamConnection then
+			freecamConnection:Disconnect()
+			freecamConnection = nil
+		end
+		
+		if hrp then hrp.Anchored = false end
+		camera.CameraType = Enum.CameraType.Custom
+		
+		if spectating and isViewingTarget and targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
+			camera.CameraSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+		else
+			if character and character:FindFirstChildOfClass("Humanoid") then
+				camera.CameraSubject = character:FindFirstChildOfClass("Humanoid")
+			end
+		end
+	end
+end
+
+FreecamBtn.MouseButton1Click:Connect(function()
+	ToggleFreecam(not freecamming)
+end)
+
+--------------------------------------------------------------------------
+-- MAIN INTERFACE TOGGLE CONTROL
+--------------------------------------------------------------------------
+local function ToggleSpectate()
+	spectating = not spectating
+	if spectating then
+		ToggleBtn.Image = "rbxassetid://117134240247797"
+		ControlFrame.Visible = true
+		isViewingTarget = false 
+		UpdateSpectateTarget(false)
+	else
+		ToggleBtn.Image = "rbxassetid://106525780110111"
+		ControlFrame.Visible = false
+		ZoomBtn.Visible = false
+		ShopBtn.Visible = false
+		RJBtn.Visible = false
+		targetPlayer = nil
+		isViewingTarget = false
+		if freecamming then ToggleFreecam(false) end
+		if localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid") then
+			camera.CameraSubject = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+		end
+	end
+end
+
+ToggleBtn.MouseButton1Click:Connect(ToggleSpectate)
+]====]
+
+-- Cache file allocation handler
+if writefile then
+	pcall(function()
+		writefile(cacheFileName, scriptCode)
+	end)
+end
+
+-- Core Initializer Thread Execution
+local runScript, err = loadstring(scriptCode)
+if runScript then
+	task.spawn(runScript)
+else
+	warn("Initialization Failure Error: " .. tostring(err))
+end			
 			textBox.FocusLost:Connect(function(enterPressed)
 				if enterPressed then
 					local text = textBox.Text
