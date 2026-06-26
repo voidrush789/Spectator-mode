@@ -22,17 +22,34 @@ ScreenGui.DisplayOrder = 100
 ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
 --------------------------------------------------------------------------
--- UI ELEMENTS CONFIGURATION
+-- UI ELEMENTS CONFIGURATION (Aligned Next to Chat Icon)
 --------------------------------------------------------------------------
 
+-- Floating Image Toggle Button (Positioned right next to the Roblox Chat icon)
+local ToggleBtn = Instance.new("ImageButton")
+ToggleBtn.Name = "ToggleBtn"
+ToggleBtn.Size = UDim2.new(0, 36, 0, 36)
+ToggleBtn.Position = UDim2.new(0, 125, 0, 5) -- Sits perfectly on the top row, right next to the chat button
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+ToggleBtn.BackgroundTransparency = 0.4 -- Matches dark transparent glass theme
+ToggleBtn.BorderSizePixel = 0
+ToggleBtn.Image = "rbxassetid://106525780110111" -- Default Closed Image
+ToggleBtn.Parent = ScreenGui
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(1, 0) -- Perfect Circle
+ToggleCorner.Parent = ToggleBtn
+
+-- Main Control Panel (Positioned cleanly on the left side under the topbar)
 local ControlFrame = Instance.new("Frame")
 ControlFrame.Name = "ControlFrame"
 ControlFrame.Size = UDim2.new(0, 190, 0, 40)
-ControlFrame.Position = UDim2.new(0, 15, 0, 42)
+ControlFrame.Position = UDim2.new(0, 15, 0, 45) -- Drops down cleanly on the left side
 ControlFrame.BackgroundTransparency = 1
 ControlFrame.Visible = false
 ControlFrame.Parent = ScreenGui
 
+-- Left Cycle Arrow (<)
 local LeftBtn = Instance.new("TextButton")
 LeftBtn.Name = "LeftBtn"
 LeftBtn.Size = UDim2.new(0, 32, 0, 32)
@@ -50,6 +67,7 @@ local LeftCorner = Instance.new("UICorner")
 LeftCorner.CornerRadius = UDim.new(1, 0)
 LeftCorner.Parent = LeftBtn
 
+-- Right Cycle Arrow (>)
 local RightBtn = Instance.new("TextButton")
 RightBtn.Name = "RightBtn"
 RightBtn.Size = UDim2.new(0, 32, 0, 32)
@@ -67,6 +85,7 @@ local RightCorner = Instance.new("UICorner")
 RightCorner.CornerRadius = UDim.new(1, 0)
 RightCorner.Parent = RightBtn
 
+-- Small Profile Capsule Tracker
 local ProfileCapsule = Instance.new("Frame")
 ProfileCapsule.Name = "ProfileCapsule"
 ProfileCapsule.Size = UDim2.new(0, 114, 0, 32)
@@ -80,6 +99,7 @@ local CapsuleCorner = Instance.new("UICorner")
 CapsuleCorner.CornerRadius = UDim.new(0, 16)
 CapsuleCorner.Parent = ProfileCapsule
 
+-- Dynamic Live Player Avatar Headshot
 local ProfileIcon = Instance.new("ImageLabel")
 ProfileIcon.Name = "ProfileIcon"
 ProfileIcon.Size = UDim2.new(0, 24, 0, 24)
@@ -92,15 +112,18 @@ local IconCorner = Instance.new("UICorner")
 IconCorner.CornerRadius = UDim.new(1, 0)
 IconCorner.Parent = ProfileIcon
 
+-- Micro Text Container
 local TextContainer = Instance.new("Frame")
 TextContainer.Size = UDim2.new(0, 75, 0, 26)
 TextContainer.Position = UDim2.new(0, 34, 0.5, -13)
 TextContainer.BackgroundTransparency = 1
 TextContainer.Parent = ProfileCapsule
 
+-- Compact Username Label
 local UserLabel = Instance.new("TextLabel")
 UserLabel.Name = "UserLabel"
 UserLabel.Size = UDim2.new(1, 0, 0, 14)
+UserLabel.Position = UDim2.new(0, 0, 0, 0)
 UserLabel.BackgroundTransparency = 1
 UserLabel.Text = "Username"
 UserLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -110,9 +133,11 @@ UserLabel.TextXAlignment = Enum.TextXAlignment.Left
 UserLabel.TextTruncate = Enum.TextTruncate.AtEnd
 UserLabel.Parent = TextContainer
 
+-- Compact Display Name Label
 local NickLabel = Instance.new("TextLabel")
 NickLabel.Name = "NickLabel"
 NickLabel.Size = UDim2.new(1, 0, 0, 12)
+NickLabel.Position = UDim2.new(0, 0, 0, 12)
 NickLabel.BackgroundTransparency = 1
 NickLabel.Text = "Nickname"
 NickLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -165,6 +190,7 @@ local function UpdateSpectateTarget()
 	end
 end
 
+-- Camera Subject Lock Thread
 task.spawn(function()
 	while task.wait(0.2) do
 		if spectating and targetPlayer then
@@ -177,6 +203,7 @@ task.spawn(function()
 	end
 end)
 
+-- Button Navigation Listeners
 LeftBtn.MouseButton1Click:Connect(function()
 	targetIndex = targetIndex - 1
 	UpdateSpectateTarget()
@@ -188,19 +215,17 @@ RightBtn.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------------------------------
--- TOTAL STEAL INTERCEPT LOGIC (100% INVISIBLE TO OTHERS)
+-- TOGGLE LOGIC
 --------------------------------------------------------------------------
-local lastToggle = 0
 local function ToggleSpectate()
-	if os.clock() - lastToggle < 0.3 then return end
-	lastToggle = os.clock()
-
 	spectating = not spectating
 	if spectating then
+		ToggleBtn.Image = "rbxassetid://117134240247797" -- Open Asset ID
 		ControlFrame.Visible = true
 		targetIndex = 1
 		UpdateSpectateTarget()
 	else
+		ToggleBtn.Image = "rbxassetid://106525780110111" -- Close Asset ID
 		ControlFrame.Visible = false
 		targetPlayer = nil
 		if localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid") then
@@ -209,32 +234,7 @@ local function ToggleSpectate()
 	end
 end
 
--- Hook network calls directly to block data replication to the server
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-	local method = getnamecallmethod()
-	local args = {...}
-	
-	-- Legacy Chat Intercept (Blocks old chat engine remotes)
-	if method == "FireServer" and self.Name == "SayMessageRequest" then
-		local msg = args[1]
-		if msg and msg:lower():match("^%s*/view%s*$") then
-			task.spawn(ToggleSpectate)
-			return -- Dropping this call means the server never sees it
-		end
-	end
-	
-	-- Modern Chat Intercept (Blocks new TextChatService channels)
-	if method == "SendAsync" and self:IsA("TextChannel") then
-		local msg = args[1]
-		if msg and msg:lower():match("^%s*/view%s*$") then
-			task.spawn(ToggleSpectate)
-			return -- Dropping this call means nobody else in the channel gets it
-		end
-	end
-	
-	return oldNamecall(self, ...)
-end)
+ToggleBtn.MouseButton1Click:Connect(ToggleSpectate)
 ]====]
 
 -- Instant execution loop for current play session
