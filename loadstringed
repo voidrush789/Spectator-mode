@@ -1,1 +1,1 @@
-loadstring(game:HttpGet("https://raw.githubusercontent.com/voidrush789/Spectator-mode/refs/heads/main/Spectator-Mode"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/voidrush789/Spectator-mode/refs/heads/main/Spectator-mode"))()
