@@ -1,5 +1,5 @@
 --======================================================================================
---                     VOIDRUSH SPECTATOR & FREECAM V4.2
+--                     VOIDRUSH SPECTATOR & FREECAM V4.6 (FIXED)
 --======================================================================================
 
 local cacheFileName = "voidrush_spectator_cache.lua"
@@ -14,6 +14,9 @@ local TeleportService = game:GetService("TeleportService")
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
+-- Cross-Executor Clipboard Support
+local setClipboard = setclipboard or toclipboard or (Clipboard and Clipboard.set)
+
 -- Fetch Roblox's Native Control Module
 local PlayerModule, controls
 pcall(function()
@@ -26,6 +29,9 @@ local spectating = false
 local isViewingTarget = false
 local targetIndex = 1
 local targetPlayer = nil
+
+-- Server Layout Toggle State
+local ssActive = false
 
 -- Freecam State Variables
 local freecamming = false
@@ -71,7 +77,7 @@ ToggleCorner.Parent = ToggleBtn
 
 local ControlFrame = Instance.new("Frame")
 ControlFrame.Name = "ControlFrame"
-ControlFrame.Size = UDim2.new(0, 338, 0, 40)
+ControlFrame.Size = UDim2.new(0, 450, 0, 40)
 ControlFrame.Position = UDim2.new(0, 15, 0, 45)
 ControlFrame.BackgroundTransparency = 1
 ControlFrame.Visible = false
@@ -141,6 +147,28 @@ local FreecamCorner = Instance.new("UICorner")
 FreecamCorner.CornerRadius = UDim.new(1, 0)
 FreecamCorner.Parent = FreecamBtn
 
+local SSBtn = Instance.new("TextButton")
+SSBtn.Name = "SSBtn"
+SSBtn.Size = UDim2.new(0, 32, 0, 32)
+SSBtn.Position = UDim2.new(0, 230, 0.5, -16)
+SSBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+SSBtn.BackgroundTransparency = 0.6
+SSBtn.BorderSizePixel = 0
+SSBtn.Text = "SS"
+SSBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SSBtn.Font = Enum.Font.SourceSansBold
+SSBtn.TextSize = 13
+SSBtn.Visible = false
+SSBtn.Parent = ControlFrame
+
+local SSCorner = Instance.new("UICorner")
+SSCorner.CornerRadius = UDim.new(1, 0)
+SSCorner.Parent = SSBtn
+
+-- ==========================================
+-- FREECAM CONFIGURATION BUTTONS (FC OPEN)
+-- ==========================================
+
 local ZoomBtn = Instance.new("TextButton")
 ZoomBtn.Name = "ZoomBtn"
 ZoomBtn.Size = UDim2.new(0, 32, 0, 32)
@@ -195,6 +223,71 @@ local RJCorner = Instance.new("UICorner")
 RJCorner.CornerRadius = UDim.new(1, 0)
 RJCorner.Parent = RJBtn
 
+-- ==========================================
+-- SERVER MANAGEMENT UTILITIES (SS TOGGLED)
+-- ==========================================
+
+local CSBtn = Instance.new("TextButton")
+CSBtn.Name = "CSBtn"
+CSBtn.Size = UDim2.new(0, 32, 0, 32)
+CSBtn.Position = UDim2.new(0, 266, 0.5, -16)
+CSBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+CSBtn.BackgroundTransparency = 0.6
+CSBtn.BorderSizePixel = 0
+CSBtn.Text = "CS"
+CSBtn.TextColor3 = Color3.fromRGB(255, 200, 50)
+CSBtn.Font = Enum.Font.SourceSansBold
+CSBtn.TextSize = 13
+CSBtn.Visible = false
+CSBtn.Parent = ControlFrame
+
+local CSCorner = Instance.new("UICorner")
+CSCorner.CornerRadius = UDim.new(1, 0)
+CSCorner.Parent = CSBtn
+
+local IDTextBox = Instance.new("TextBox")
+IDTextBox.Name = "IDTextBox"
+IDTextBox.Size = UDim2.new(0, 100, 0, 32)
+IDTextBox.Position = UDim2.new(0, 302, 0.5, -16)
+IDTextBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+IDTextBox.BackgroundTransparency = 0.6
+IDTextBox.BorderSizePixel = 0
+IDTextBox.Text = ""
+IDTextBox.PlaceholderText = "Server ID..."
+IDTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+IDTextBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+IDTextBox.Font = Enum.Font.SourceSans
+IDTextBox.TextSize = 11
+IDTextBox.ClearTextOnFocus = true
+IDTextBox.Visible = false
+IDTextBox.Parent = ControlFrame
+
+local TBCorner = Instance.new("UICorner")
+TBCorner.CornerRadius = UDim.new(0, 6)
+TBCorner.Parent = IDTextBox
+
+local ApplyBtn = Instance.new("TextButton")
+ApplyBtn.Name = "ApplyBtn"
+ApplyBtn.Size = UDim2.new(0, 32, 0, 32)
+ApplyBtn.Position = UDim2.new(0, 408, 0.5, -16)
+ApplyBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+ApplyBtn.BackgroundTransparency = 0.6
+ApplyBtn.BorderSizePixel = 0
+ApplyBtn.Text = "AP"
+ApplyBtn.TextColor3 = Color3.fromRGB(0, 180, 255)
+ApplyBtn.Font = Enum.Font.SourceSansBold
+ApplyBtn.TextSize = 13
+ApplyBtn.Visible = false
+ApplyBtn.Parent = ControlFrame
+
+local ApplyCorner = Instance.new("UICorner")
+ApplyCorner.CornerRadius = UDim.new(1, 0)
+ApplyCorner.Parent = ApplyBtn
+
+-- ==========================================
+-- IDENTITY PROFILE LABELS
+-- ==========================================
+
 local ProfileIcon = Instance.new("ImageLabel")
 ProfileIcon.Name = "ProfileIcon"
 ProfileIcon.Size = UDim2.new(0, 24, 0, 24)
@@ -237,6 +330,18 @@ NickLabel.TextSize = 9
 NickLabel.TextXAlignment = Enum.TextXAlignment.Left
 NickLabel.TextTruncate = Enum.TextTruncate.AtEnd
 NickLabel.Parent = TextContainer
+
+--------------------------------------------------------------------------
+-- SMART TARGET PARSER (FIXES CROSS-GAME JOIN BUG)
+--------------------------------------------------------------------------
+local function parseTarget(inputText)
+	local cleanText = inputText:match("^%s*(.-)%s*$") or ""
+	local customPlaceId, customJobId = cleanText:match("^(%d+)[%s%c%p]+([%w%-]+)$")
+	if customPlaceId and customJobId then
+		return tonumber(customPlaceId), customJobId
+	end
+	return game.PlaceId, cleanText:gsub("%s+", "")
+end
 
 --------------------------------------------------------------------------
 -- CORE SYSTEM LOGIC
@@ -325,7 +430,7 @@ LeftBtn.MouseButton1Click:Connect(function() CyclePlayers(-1) end)
 RightBtn.MouseButton1Click:Connect(function() CyclePlayers(1) end)
 
 --------------------------------------------------------------------------
--- SECURE WORKSPACE-CACHE PERSISTENCE ENGINE
+-- WORKSPACE-CACHE PERSISTENCE TELEPORT ENGINE
 --------------------------------------------------------------------------
 
 local queueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
@@ -344,7 +449,7 @@ local function ForceQueueScript()
 	end
 end
 
--- Intercept unexpected map teleports
+-- Intercept maps changes/native teleports
 pcall(function()
 	localPlayer.OnTeleport:Connect(function(teleportState)
 		if teleportState == Enum.TeleportState.InProgress then
@@ -353,14 +458,14 @@ pcall(function()
 	end)
 end)
 
--- RJ Button Click Handlers
+-- RJ Handler
 RJBtn.MouseButton1Click:Connect(function()
 	ForceQueueScript()
 	task.wait(0.1)
 	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
 end)
 
--- SH Button Click Handlers
+-- SH Handler
 ShopBtn.MouseButton1Click:Connect(function()
 	ForceQueueScript()
 	task.spawn(function()
@@ -388,8 +493,50 @@ ShopBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
+-- CS (Copy Server ID) Handler
+CSBtn.MouseButton1Click:Connect(function()
+	if setClipboard then
+		setClipboard(tostring(game.JobId))
+		CSBtn.Text = "Copied!"
+		CSBtn.TextColor3 = Color3.fromRGB(0, 255, 120)
+		task.wait(1)
+		CSBtn.Text = "CS"
+		CSBtn.TextColor3 = Color3.fromRGB(255, 200, 50)
+	end
+end)
+
+-- AP (Apply/Join Text Box Server ID) Handler
+ApplyBtn.MouseButton1Click:Connect(function()
+	local targetPlaceId, targetJobId = parseTarget(IDTextBox.Text)
+	if targetJobId and #targetJobId > 5 then
+		ForceQueueScript()
+		task.wait(0.1)
+		pcall(function()
+			TeleportService:TeleportToPlaceInstance(targetPlaceId, targetJobId, localPlayer)
+		end)
+	end
+end)
+
 --------------------------------------------------------------------------
--- CHAT INTERCEPT ENGINE (SPEED SLIDER REPLACEMENT)
+-- SS BUTTON TOGGLE ACTIONS
+--------------------------------------------------------------------------
+SSBtn.MouseButton1Click:Connect(function()
+	ssActive = not ssActive
+	if ssActive then
+		SSBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+		CSBtn.Visible = true
+		IDTextBox.Visible = true
+		ApplyBtn.Visible = true
+	else
+		SSBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		CSBtn.Visible = false
+		IDTextBox.Visible = false
+		ApplyBtn.Visible = false
+	end
+end)
+
+--------------------------------------------------------------------------
+-- SPEED MODIFIER CHAT CODES
 --------------------------------------------------------------------------
 
 RunService.RenderStepped:Connect(function()
@@ -414,7 +561,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 --------------------------------------------------------------------------
--- ZOOM TOGGLE ACTION WORKFLOW
+-- PINCH ZOOM TOGGLE WORKFLOW
 --------------------------------------------------------------------------
 
 ZoomBtn.MouseButton1Click:Connect(function()
@@ -428,7 +575,7 @@ ZoomBtn.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------------------------------
--- MOBILE TOUCH PANNING & PINCH-TO-ZOOM GESTURE ENGINE
+-- MOBILE TOUCH PANNING & GESTURE CALCULATIONS
 --------------------------------------------------------------------------
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -489,7 +636,7 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 --------------------------------------------------------------------------
--- FREECAM STATE SWITCH ENGINE
+-- FREECAM STATE SWITCH ENGINE (LAYOUT MANIPULATION)
 --------------------------------------------------------------------------
 
 local function ToggleFreecam(state)
@@ -499,6 +646,14 @@ local function ToggleFreecam(state)
 	if state then
 		freecamming = true
 		FreecamBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+		
+		-- Wipe all Server layouts instantly
+		SSBtn.Visible = false
+		CSBtn.Visible = false
+		IDTextBox.Visible = false
+		ApplyBtn.Visible = false
+		
+		-- Show Freecam layout settings
 		ZoomBtn.Visible = true
 		ShopBtn.Visible = true
 		RJBtn.Visible = true
@@ -526,9 +681,19 @@ local function ToggleFreecam(state)
 	else
 		freecamming = false
 		FreecamBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		
+		-- Wipe Freecam layout items
 		ZoomBtn.Visible = false
 		ShopBtn.Visible = false
 		RJBtn.Visible = false
+		
+		-- Safe restoration of SS button
+		SSBtn.Visible = true
+		if ssActive then
+			CSBtn.Visible = true
+			IDTextBox.Visible = true
+			ApplyBtn.Visible = true
+		end
 		
 		if freecamConnection then
 			freecamConnection:Disconnect()
@@ -562,12 +727,27 @@ local function ToggleSpectate()
 		ControlFrame.Visible = true
 		isViewingTarget = false 
 		UpdateSpectateTarget(false)
-	else
-		ToggleBtn.Image = "rbxassetid://106525780110111"
-		ControlFrame.Visible = false
+		
+		SSBtn.Visible = true
+		SSBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		ssActive = false -- Force clean startup
+		
+		CSBtn.Visible = false
+		IDTextBox.Visible = false
+		ApplyBtn.Visible = false
 		ZoomBtn.Visible = false
 		ShopBtn.Visible = false
 		RJBtn.Visible = false
+	else
+		ToggleBtn.Image = "rbxassetid://106525780110111"
+		ControlFrame.Visible = false
+		SSBtn.Visible = false
+		ZoomBtn.Visible = false
+		ShopBtn.Visible = false
+		RJBtn.Visible = false
+		CSBtn.Visible = false
+		IDTextBox.Visible = false
+		ApplyBtn.Visible = false
 		targetPlayer = nil
 		isViewingTarget = false
 		if freecamming then ToggleFreecam(false) end
@@ -593,200 +773,4 @@ if runScript then
 	task.spawn(runScript)
 else
 	warn("Initialization Failure Error: " .. tostring(err))
-end			
-			textBox.FocusLost:Connect(function(enterPressed)
-				if enterPressed then
-					local text = textBox.Text
-					local speedMatch = text:lower():match("^/e%s*speed%s*(%d+)") or text:lower():match("^/speed%s*(%d+)")
-					
-					if speedMatch then
-						local newSpeed = tonumber(speedMatch)
-						if newSpeed then moveSpeed = newSpeed end
-						textBox.Text = "" 
-					end
-				end
-			end)
-		end
-	end
-end)
-
---------------------------------------------------------------------------
--- ZOOM TOGGLE ACTION WORKFLOW
---------------------------------------------------------------------------
-
-ZoomBtn.MouseButton1Click:Connect(function()
-	pinchZoomEnabled = not pinchZoomEnabled
-	if pinchZoomEnabled then
-		ZoomBtn.TextColor3 = Color3.fromRGB(0, 255, 120) -- Green
-	else
-		ZoomBtn.TextColor3 = Color3.fromRGB(255, 80, 80) -- Red
-		initialPinchDistance = nil
-	end
-end)
-
---------------------------------------------------------------------------
--- MOBILE TOUCH PANNING & PINCH-TO-ZOOM GESTURE ENGINE
---------------------------------------------------------------------------
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if not freecamming then return end
-	if input.UserInputType == Enum.UserInputType.Touch then
-		-- FIX: Drop touch trackers completely if they originate inside native thumbstick bounds (left 40% of screen)
-		if input.Position.X < (camera.ViewportSize.X * 0.4) then return end
-		if gameProcessed then return end
-		
-		activeTouches[input] = true
-		
-		local touches = {}
-		for t in pairs(activeTouches) do table.insert(touches, t) end
-		
-		if #touches == 2 and pinchZoomEnabled then
-			panTouch = nil
-			lastTouchPosition = nil
-			initialPinchDistance = (Vector2.new(touches[1].Position.X, touches[1].Position.Y) - Vector2.new(touches[2].Position.X, touches[2].Position.Y)).Magnitude
-		elseif #touches == 1 then
-			panTouch = input
-			lastTouchPosition = Vector2.new(input.Position.X, input.Position.Y)
-		end
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input, gameProcessed)
-	if not freecamming then return end
-	if not activeTouches[input] then return end -- Makes sure joystick adjustments don't corrupt panning metrics
-	
-	local touches = {}
-	for t in pairs(activeTouches) do table.insert(touches, t) end
-	
-	if #touches == 2 and initialPinchDistance and pinchZoomEnabled then
-		local currentDistance = (Vector2.new(touches[1].Position.X, touches[1].Position.Y) - Vector2.new(touches[2].Position.X, touches[2].Position.Y)).Magnitude
-		local change = currentDistance - initialPinchDistance
-		initialPinchDistance = currentDistance
-		
-		local zoomSensitivity = 0.15
-		camera.CFrame = camera.CFrame * CFrame.new(0, 0, -change * zoomSensitivity)
-	elseif input == panTouch and lastTouchPosition then
-		local currentPosition = Vector2.new(input.Position.X, input.Position.Y)
-		local delta = currentPosition - lastTouchPosition
-		lastTouchPosition = currentPosition
-		
-		cameraRotY = cameraRotY - (delta.X * 0.3)
-		cameraRotX = cameraRotX - (delta.Y * 0.3)
-		cameraRotX = math.clamp(cameraRotX, -85, 85)
-	end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-	if activeTouches[input] then
-		activeTouches[input] = nil
-		initialPinchDistance = nil
-	end
-	if input == panTouch then
-		panTouch = nil
-		lastTouchPosition = nil
-	end
-end)
-
---------------------------------------------------------------------------
--- FREECAM STATE SWITCH ENGINE
---------------------------------------------------------------------------
-
-local function ToggleFreecam(state)
-	local character = localPlayer.Character
-	local hrp = character and character:FindFirstChild("HumanoidRootPart")
-
-	if state then
-		freecamming = true
-		FreecamBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
-		ZoomBtn.Visible = true -- Zoom button appears next to FC button
-		
-		local startingCFrame = camera.CFrame
-		camera.CameraType = Enum.CameraType.Scriptable
-		camera.CFrame = startingCFrame
-		
-		if hrp then hrp.Anchored = true end
-		
-		local look = startingCFrame.LookVector
-		cameraRotY = math.deg(math.atan2(-look.X, -look.Z))
-		cameraRotX = math.deg(math.asin(look.Y))
-		
-		freecamConnection = RunService.RenderStepped:Connect(function(dt)
-			local moveVector = Vector3.new(0, 0, 0)
-			if controls and controls.GetMoveVector then
-				moveVector = controls:GetMoveVector()
-			end
-			
-			local direction = (camera.CFrame.LookVector * -moveVector.Z) + (camera.CFrame.RightVector * moveVector.X)
-			local targetPos = camera.CFrame.Position + (direction * moveSpeed * dt)
-			camera.CFrame = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(cameraRotY), 0) * CFrame.Angles(math.rad(cameraRotX), 0, 0)
-		end)
-	else
-		freecamming = false
-		FreecamBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-		ZoomBtn.Visible = false -- Hides zoom button entirely
-		
-		if freecamConnection then
-			freecamConnection:Disconnect()
-			freecamConnection = nil
-		end
-		
-		if hrp then hrp.Anchored = false end
-		camera.CameraType = Enum.CameraType.Custom
-		
-		if spectating and isViewingTarget and targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChildOfClass("Humanoid") then
-			camera.CameraSubject = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
-		else
-			if character and character:FindFirstChildOfClass("Humanoid") then
-				camera.CameraSubject = character:FindFirstChildOfClass("Humanoid")
-			end
-		end
-	end
-end
-
-FreecamBtn.MouseButton1Click:Connect(function()
-	ToggleFreecam(not freecamming)
-end)
-
---------------------------------------------------------------------------
--- MAIN INTERFACE TOGGLE CONTROL
---------------------------------------------------------------------------
-local function ToggleSpectate()
-	spectating = not spectating
-	if spectating then
-		ToggleBtn.Image = "rbxassetid://117134240247797"
-		ControlFrame.Visible = true
-		isViewingTarget = false 
-		UpdateSpectateTarget(false)
-	else
-		ToggleBtn.Image = "rbxassetid://106525780110111"
-		ControlFrame.Visible = false
-		ZoomBtn.Visible = false
-		targetPlayer = nil
-		isViewingTarget = false
-		if freecamming then ToggleFreecam(false) end
-		if localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid") then
-			camera.CameraSubject = localPlayer.Character:FindFirstChildOfClass("Humanoid")
-		end
-	end
-end
-
-ToggleBtn.MouseButton1Click:Connect(ToggleSpectate)
-]====]
-
--- Instant execution setup
-local runScript, err = loadstring(scriptCode)
-if runScript then
-    task.spawn(runScript)
-else
-    warn("UI Load Error: " .. tostring(err))
-end
-
--- Delta Client Teleport Persistence Handler
-local queueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
-if queueTeleport then
-    game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(teleportState)
-        if teleportState == Enum.TeleportState.InProgress then
-            queueTeleport(scriptCode)
-        end
-    end)
 end
